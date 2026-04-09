@@ -342,7 +342,9 @@
             <h3>HOST CONTROL CENTER</h3>
             <p style="color: #00ff00; font-size: 0.9rem;">● Connected to Pager</p>
             
-            <div class="form-group" style="margin-top: 20px;">
+            <button id="btn-fetch-contact" class="btn-primary btn-secondary" style="padding: 10px; font-size: 0.9rem; margin-top: 15px;">📖 FETCH FROM CONTACTS</button>
+            
+            <div class="form-group" style="margin-top: 15px;">
                 <label>CALLER NAME</label>
                 <input type="text" id="sim-caller-name" class="host-input" placeholder="e.g. John Doe">
             </div>
@@ -587,6 +589,37 @@
         });
 
         // --- HOST SENDING PAGES ---
+        
+        // Contacts API Integration
+        document.getElementById('btn-fetch-contact').addEventListener('click', async () => {
+            // Check if the browser supports opening the native contact list
+            if (!('contacts' in navigator && 'ContactsManager' in window)) {
+                // Fallback for iOS/Unsupported browsers: Generate a mock incoming call
+                const mockNames = ["MOM", "BOSS", "JOHN DOE", "SARAH", "UNKNOWN"];
+                const mockNumbers = ["555-0199", "555-0102", "555-0188", "555-0177", "RESTRICTED"];
+                const r = Math.floor(Math.random() * mockNames.length);
+                
+                document.getElementById('sim-caller-name').value = mockNames[r];
+                document.getElementById('sim-caller-number').value = mockNumbers[r];
+                alert("Contacts API not supported on this device. Filled with a random mock contact instead!");
+                return;
+            }
+
+            try {
+                // Request Name and Telephone from the native phonebook
+                const props = ['name', 'tel'];
+                const contacts = await navigator.contacts.select(props, { multiple: false });
+                
+                if (contacts.length > 0) {
+                    const contact = contacts[0];
+                    document.getElementById('sim-caller-name').value = contact.name ? contact.name[0] : "UNKNOWN";
+                    document.getElementById('sim-caller-number').value = contact.tel ? contact.tel[0] : "--";
+                }
+            } catch (err) {
+                console.error("Error fetching contacts:", err);
+            }
+        });
+
         document.getElementById('btn-send-page').addEventListener('click', () => {
             if (!peerConnection) return;
             
