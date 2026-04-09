@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>90s Retro Pager Network</title>
     
+    <!-- Add PeerJS for WebRTC Peer-to-Peer connection -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
     <style>
         :root {
             --lcd-bg: #BFD8B8;
@@ -362,35 +365,15 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
+    <!-- PeerJS App Logic -->
+    <script>
         // --- GLOBAL VARIABLES & STATE ---
         let audioCtx;
         let msgCounter = 0;
         let clearTimer;
-        let currentUser = null;
         let activeRole = null; // 'host' or 'pager'
-        let myConnectionCode = null;
-        let activeConnectionDoc = null;
-        let unsubscribeSnapshot = null;
-
-        // Configuration
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pager-app';
-        let firebaseConfig;
-        try {
-            firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        } catch (e) {
-            console.error("Firebase config error:", e);
-        }
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        let peer = null;
+        let peerConnection = null;
 
         // --- DOM ELEMENTS ---
         const views = {
@@ -407,19 +390,6 @@
             Object.values(views).forEach(v => v.classList.remove('active'));
             views[viewName].classList.add('active');
         }
-
-        // --- FIREBASE AUTH ---
-        async function initAuth() {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        }
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) currentUser = user;
-        });
 
         // --- AUDIO ENGINE ---
         function initAudio() {
@@ -499,70 +469,79 @@
         // --- APP WORKFLOW ---
         
         // 1. Power On
-        document.getElementById('btn-power-on').addEventListener('click', async () => {
+        document.getElementById('btn-power-on').addEventListener('click', () => {
             initAudio();
-            await initAuth();
             switchView('role');
         });
 
         // 2. Role Selection
         document.getElementById('btn-role-pager').addEventListener('click', () => setupPager());
-        document.getElementById('btn-role-host').addEventListener('click', () => switchView('hostSetup'));
+        document.getElementById('btn-role-host').addEventListener('click', () => {
+            activeRole = 'host';
+            // Initialize peer for host (random ID)
+            peer = new Peer(); 
+            switchView('hostSetup');
+        });
 
         // --- PAGER SETUP ---
-        async function setupPager() {
+        function setupPager() {
             activeRole = 'pager';
-            if (!currentUser) return;
             
             // Generate random 5-digit code
-            myConnectionCode = Math.floor(10000 + Math.random() * 90000).toString();
-            document.getElementById('pager-code-display').innerText = myConnectionCode;
+            const code = Math.floor(10000 + Math.random() * 90000).toString();
+            document.getElementById('pager-code-display').innerText = "LOAD...";
             switchView('pagerSetup');
 
-            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
-            await setDoc(connRef, {
-                status: 'waiting',
-                pagerId: currentUser.uid,
-                timestamp: Date.now()
+            // Initialize PeerJS with a specific ID based on the code
+            peer = new Peer('retropager-' + code);
+
+            peer.on('open', (id) => {
+                document.getElementById('pager-code-display').innerText = code;
             });
 
-            // Listen for host requests
-            unsubscribeSnapshot = onSnapshot(connRef, (docSnap) => {
-                if (!docSnap.exists()) return;
-                const data = docSnap.data();
-                
-                if (data.status === 'requesting' && data.hostId) {
-                    modal.classList.add('active');
-                } else if (data.status === 'connected') {
-                    modal.classList.remove('active');
-                    switchView('pagerActive');
-                } else if (data.status === 'page_sent' && data.timestamp !== activeConnectionDoc?.timestamp) {
-                    // Received a page!
-                    triggerAlert(data);
-                }
-                activeConnectionDoc = data;
-            }, (err) => console.error(err));
+            // Listen for incoming host connections
+            peer.on('connection', (conn) => {
+                peerConnection = conn;
+                modal.classList.add('active'); // Show accept/reject modal
+
+                conn.on('data', (data) => {
+                    if (data.action === 'page_sent') {
+                        triggerAlert(data);
+                    }
+                });
+            });
+
+            peer.on('error', (err) => {
+                console.error("PeerJS Error:", err);
+                document.getElementById('pager-code-display').innerText = "ERROR";
+            });
         }
 
         // Accept/Reject Connection
-        document.getElementById('btn-accept-connection').addEventListener('click', async () => {
-            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
-            await updateDoc(connRef, { status: 'connected' });
-            modal.classList.remove('active');
-            switchView('pagerActive');
+        document.getElementById('btn-accept-connection').addEventListener('click', () => {
+            if (peerConnection) {
+                peerConnection.send({ action: 'connection_accepted' });
+                modal.classList.remove('active');
+                switchView('pagerActive');
+            }
         });
 
-        document.getElementById('btn-reject-connection').addEventListener('click', async () => {
-            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
-            await updateDoc(connRef, { status: 'waiting', hostId: null });
-            modal.classList.remove('active');
+        document.getElementById('btn-reject-connection').addEventListener('click', () => {
+            if (peerConnection) {
+                peerConnection.send({ action: 'connection_rejected' });
+                setTimeout(() => {
+                    peerConnection.close();
+                    peerConnection = null;
+                }, 500); // give time to send reject message
+                modal.classList.remove('active');
+            }
         });
 
         // --- HOST SETUP ---
-        document.getElementById('btn-host-connect').addEventListener('click', async () => {
-            if (!currentUser) return;
+        document.getElementById('btn-host-connect').addEventListener('click', () => {
             const code = document.getElementById('host-code-input').value.trim();
             const errorLabel = document.getElementById('host-setup-error');
+            const connectBtn = document.getElementById('btn-host-connect');
             
             if (code.length !== 5) {
                 errorLabel.innerText = "Please enter a valid 5-digit code.";
@@ -570,43 +549,46 @@
                 return;
             }
 
-            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', code);
-            const docSnap = await getDoc(connRef);
-
-            if (!docSnap.exists()) {
-                errorLabel.innerText = "Code not found. Is the Pager app open?";
-                errorLabel.style.display = "block";
-                return;
-            }
-
             errorLabel.style.display = "none";
-            myConnectionCode = code;
+            connectBtn.innerText = "CONNECTING...";
+            connectBtn.disabled = true;
 
-            // Request connection
-            await updateDoc(connRef, {
-                status: 'requesting',
-                hostId: currentUser.uid
+            // Connect to the Pager's PeerJS ID
+            peerConnection = peer.connect('retropager-' + code, { reliable: true });
+
+            peerConnection.on('open', () => {
+                // Connected! Waiting for Pager to hit 'Accept'
+                connectBtn.innerText = "WAITING FOR PAGER...";
             });
 
-            // Listen for Pager to accept
-            unsubscribeSnapshot = onSnapshot(connRef, (docSnap) => {
-                if (!docSnap.exists()) return;
-                const data = docSnap.data();
-                
-                if (data.status === 'connected') {
+            peerConnection.on('data', (data) => {
+                if (data.action === 'connection_accepted') {
                     switchView('hostActive');
-                } else if (data.status === 'waiting') {
-                    // Pager rejected
+                } else if (data.action === 'connection_rejected') {
                     errorLabel.innerText = "Connection rejected by Pager.";
                     errorLabel.style.display = "block";
-                    if (unsubscribeSnapshot) unsubscribeSnapshot();
+                    connectBtn.innerText = "CONNECT";
+                    connectBtn.disabled = false;
+                    peerConnection.close();
                 }
-            }, (err) => console.error(err));
+            });
+
+            peer.on('error', (err) => {
+                if (err.type === 'peer-unavailable') {
+                    errorLabel.innerText = "Code not found. Is the Pager app open?";
+                    errorLabel.style.display = "block";
+                } else {
+                    errorLabel.innerText = "Connection error occurred.";
+                    errorLabel.style.display = "block";
+                }
+                connectBtn.innerText = "CONNECT";
+                connectBtn.disabled = false;
+            });
         });
 
         // --- HOST SENDING PAGES ---
-        document.getElementById('btn-send-page').addEventListener('click', async () => {
-            if (!currentUser || !myConnectionCode) return;
+        document.getElementById('btn-send-page').addEventListener('click', () => {
+            if (!peerConnection) return;
             
             const btn = document.getElementById('btn-send-page');
             btn.innerText = "SENDING...";
@@ -615,13 +597,11 @@
             const name = document.getElementById('sim-caller-name').value.trim() || "UNKNOWN";
             const number = document.getElementById('sim-caller-number').value.trim() || "--";
 
-            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
-            
-            await updateDoc(connRef, {
-                status: 'page_sent',
+            // Send the page data through WebRTC
+            peerConnection.send({
+                action: 'page_sent',
                 callerName: name,
-                callerNumber: number,
-                timestamp: Date.now() // Timestamp forces the pager's listener to recognize a new alert
+                callerNumber: number
             });
 
             setTimeout(() => {
