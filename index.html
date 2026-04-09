@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>90s Retro Pager Network</title>
+    
+    <style>
+        :root {
+            --lcd-bg: #BFD8B8;
+            --lcd-text: #1B3A1B;
+            --lcd-border: #0F2A0F;
+            --lcd-flash: #E8F5E9;
+            --plastic-body: #111111;
+            --host-bg: #1e1e2f;
+            --host-text: #e0e0e0;
+            --host-accent: #4FC3F7;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #2a2a2a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100dvh;
+            margin: 0;
+            font-family: "Courier New", Courier, monospace;
+            overflow: hidden;
+            color: white;
+        }
+
+        .view-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .view-container.active {
+            display: flex;
+        }
+
+        /* Initial Sound Setup Overlay & Menus */
+        .menu-box {
+            background: rgba(0,0,0,0.85);
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #555;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .menu-box h2 {
+            color: #00ff00;
+            margin-top: 0;
+        }
+
+        .btn-primary {
+            background: #00ff00;
+            color: #000;
+            border: 2px solid #00ff00;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px 0;
+            text-transform: uppercase;
+            width: 100%;
+            border-radius: 8px;
+            transition: transform 0.1s;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: #4FC3F7;
+            border: 2px solid #4FC3F7;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
+            text-align: center;
+            font-family: inherit;
+            border: 2px solid #555;
+            background: #222;
+            color: #00ff00;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-transform: uppercase;
+        }
+
+        .code-display {
+            font-size: 3rem;
+            color: #4FC3F7;
+            letter-spacing: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        /* Pager Hardware Body */
+        .pager-body {
+            background: var(--plastic-body);
+            padding: 25px 15px 35px 15px;
+            border-radius: 20px;
+            width: 94vw;
+            max-width: 380px;
+            box-shadow: inset 2px 2px 5px rgba(255,255,255,0.1), 5px 10px 25px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        /* Pager LCD Screen */
+        .pager-screen-container {
+            width: 100%;
+            background: var(--lcd-bg);
+            border: 6px solid var(--lcd-border);
+            border-radius: 4px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+            transition: background 0.1s;
+        }
+
+        .top-bar, .bottom-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 10px;
+            background: #A8CFA5;
+            border-bottom: 3px solid var(--lcd-border);
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--lcd-text);
+        }
+
+        .bottom-bar {
+            border-top: 3px solid var(--lcd-border);
+            border-bottom: none;
+        }
+
+        .screen {
+            padding: 25px 10px;
+            text-align: center;
+            color: var(--lcd-text);
+            min-height: 180px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .label {
+            font-size: 15px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            opacity: 0;
+        }
+
+        .caller {
+            font-size: 26px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+
+        .number {
+            font-size: 20px;
+            margin-top: 5px;
+        }
+
+        /* Hardware Buttons */
+        .hardware-buttons {
+            display: flex;
+            justify-content: center;
+            margin-top: 25px;
+            width: 100%;
+        }
+
+        .btn-clear {
+            background: #333;
+            border: 2px solid #000;
+            border-top: 2px solid #555;
+            border-left: 2px solid #555;
+            color: white;
+            padding: 15px 0;
+            width: 70%;
+            font-family: inherit;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 2px 3px 6px rgba(0,0,0,0.6);
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+
+        .btn-clear:active {
+            border: 2px solid #000;
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.8);
+            background: #222;
+            transform: translateY(2px);
+        }
+
+        /* Host Dashboard */
+        .host-dashboard {
+            background: var(--host-bg);
+            width: 100%;
+            max-width: 400px;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #444;
+            color: var(--host-text);
+            text-align: center;
+        }
+
+        .host-dashboard h3 {
+            color: var(--host-accent);
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .host-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background: #111;
+            color: white;
+            font-family: inherit;
+        }
+
+        /* Animations & Effects */
+        .flash { background: var(--lcd-flash) !important; }
+        @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+        .blinking { animation: blink 500ms infinite; opacity: 1; }
+        
+        /* Modal */
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none;
+            justify-content: center; align-items: center; z-index: 2000;
+        }
+        #modal-overlay.active { display: flex; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. Initialization View -->
+    <div id="view-init" class="view-container active">
+        <div class="menu-box">
+            <h2>SYS_INIT: PAGER NETWORK</h2>
+            <p>To receive calls and alerts, power on the system.</p>
+            <button id="btn-power-on" class="btn-primary">POWER ON & ENABLE AUDIO</button>
+        </div>
+    </div>
+
+    <!-- 2. Role Selection View -->
+    <div id="view-role" class="view-container">
+        <div class="menu-box">
+            <h2>SELECT ROLE</h2>
+            <p>Is this device the Host (sender) or the Pager (receiver)?</p>
+            <button id="btn-role-host" class="btn-primary btn-secondary">I AM THE HOST</button>
+            <button id="btn-role-pager" class="btn-primary">I AM THE PAGER</button>
+        </div>
+    </div>
+
+    <!-- 3a. Pager Setup View -->
+    <div id="view-pager-setup" class="view-container">
+        <div class="menu-box">
+            <h2 style="color: #4FC3F7;">YOUR PAGER CODE</h2>
+            <div id="pager-code-display" class="code-display">-----</div>
+            <p>Enter this code on the Host device to connect.</p>
+            <p style="color: #aaa; font-size: 0.9rem;">Waiting for host connection...</p>
+        </div>
+    </div>
+
+    <!-- 3b. Host Setup View -->
+    <div id="view-host-setup" class="view-container">
+        <div class="menu-box">
+            <h2 style="color: #4FC3F7;">CONNECT TO PAGER</h2>
+            <p>Enter the 5-digit code shown on the Pager device.</p>
+            <input type="text" id="host-code-input" class="input-field" placeholder="12345" maxlength="5">
+            <button id="btn-host-connect" class="btn-primary">CONNECT</button>
+            <p id="host-setup-error" style="color: red; display: none;"></p>
+        </div>
+    </div>
+
+    <!-- 4a. Pager Active View (Retro UI) -->
+    <div id="view-pager-active" class="view-container">
+        <div class="pager-body">
+            <div class="pager-screen-container" id="pagerScreen">
+                <div class="top-bar">
+                    <span id="signal">SIGNAL ▮▮▮</span>
+                    <span id="time">--:--</span>
+                </div>
+                <div class="screen">
+                    <div id="callLabel" class="label">INCOMING CALL</div>
+                    <div id="callerName" class="caller">READY</div>
+                    <div id="callerNumber" class="number">--</div>
+                </div>
+                <div class="bottom-bar">
+                    <span id="msgCount">MSG 00</span>
+                    <span>BAT ▮▮▮</span>
+                </div>
+            </div>
+            <div class="hardware-buttons">
+                <button class="btn-clear" id="clearBtn">READ / CLEAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4b. Host Active View -->
+    <div id="view-host-active" class="view-container">
+        <div class="host-dashboard">
+            <h3>HOST CONTROL CENTER</h3>
+            <p style="color: #00ff00; font-size: 0.9rem;">● Connected to Pager</p>
+            
+            <div class="form-group" style="margin-top: 20px;">
+                <label>CALLER NAME</label>
+                <input type="text" id="sim-caller-name" class="host-input" placeholder="e.g. John Doe">
+            </div>
+            <div class="form-group">
+                <label>CALLER NUMBER (Optional)</label>
+                <input type="text" id="sim-caller-number" class="host-input" placeholder="e.g. 555-0192">
+            </div>
+            
+            <button id="btn-send-page" class="btn-primary" style="margin-top: 15px;">SEND PAGE ALERT</button>
+        </div>
+    </div>
+
+    <!-- Modal for Connection Request -->
+    <div id="modal-overlay">
+        <div class="menu-box">
+            <h2>CONNECTION REQUEST</h2>
+            <p>A Host is trying to connect to your Pager.</p>
+            <button id="btn-accept-connection" class="btn-primary">ACCEPT</button>
+            <button id="btn-reject-connection" class="btn-primary" style="background: red; border-color: red;">REJECT</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- GLOBAL VARIABLES & STATE ---
+        let audioCtx;
+        let msgCounter = 0;
+        let clearTimer;
+        let currentUser = null;
+        let activeRole = null; // 'host' or 'pager'
+        let myConnectionCode = null;
+        let activeConnectionDoc = null;
+        let unsubscribeSnapshot = null;
+
+        // Configuration
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-pager-app';
+        let firebaseConfig;
+        try {
+            firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        } catch (e) {
+            console.error("Firebase config error:", e);
+        }
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- DOM ELEMENTS ---
+        const views = {
+            init: document.getElementById('view-init'),
+            role: document.getElementById('view-role'),
+            pagerSetup: document.getElementById('view-pager-setup'),
+            hostSetup: document.getElementById('view-host-setup'),
+            pagerActive: document.getElementById('view-pager-active'),
+            hostActive: document.getElementById('view-host-active')
+        };
+        const modal = document.getElementById('modal-overlay');
+
+        function switchView(viewName) {
+            Object.values(views).forEach(v => v.classList.remove('active'));
+            views[viewName].classList.add('active');
+        }
+
+        // --- FIREBASE AUTH ---
+        async function initAuth() {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) currentUser = user;
+        });
+
+        // --- AUDIO ENGINE ---
+        function initAudio() {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            const buffer = audioCtx.createBuffer(1, 1, 22050);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }
+
+        function playHarshBeep() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            createBeep(now, 0.15);
+            createBeep(now + 0.25, 0.15);
+            createBeep(now + 0.50, 0.4);
+        }
+
+        function createBeep(startTime, duration) {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = "square";
+            oscillator.frequency.value = 1200; // Classic high-pitch
+            gainNode.gain.setValueAtTime(1, startTime);
+            gainNode.gain.setValueAtTime(0, startTime + duration);
+            oscillator.start(startTime);
+            oscillator.stop(startTime + duration);
+        }
+
+        // --- PAGER LOGIC (RETRO UI) ---
+        function updateTime() {
+            const now = new Date();
+            document.getElementById("time").innerText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}).toUpperCase();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        function triggerAlert(data) {
+            msgCounter++;
+            document.getElementById('msgCount').innerText = "MSG " + String(msgCounter).padStart(2, "0");
+            document.getElementById('callerName').innerText = (data.callerName || "UNKNOWN").toUpperCase();
+            document.getElementById('callerNumber').innerText = data.callerNumber || "--";
+            
+            document.getElementById('callLabel').classList.add('blinking');
+            
+            let flashes = 0;
+            let flashInterval = setInterval(() => {
+                document.getElementById('pagerScreen').classList.toggle('flash');
+                flashes++;
+                if (flashes >= 6) {
+                    clearInterval(flashInterval);
+                    document.getElementById('pagerScreen').classList.remove('flash');
+                }
+            }, 100);
+
+            playHarshBeep();
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+
+            clearTimeout(clearTimer);
+            clearTimer = setTimeout(clearPagerScreen, 10000);
+        }
+
+        function clearPagerScreen() {
+            clearTimeout(clearTimer);
+            document.getElementById('callLabel').classList.remove('blinking');
+            document.getElementById('callerName').innerText = "STANDBY";
+            document.getElementById('callerNumber').innerText = "--";
+            document.getElementById('pagerScreen').classList.remove('flash');
+        }
+
+        document.getElementById('clearBtn').addEventListener('click', clearPagerScreen);
+
+        // --- APP WORKFLOW ---
+        
+        // 1. Power On
+        document.getElementById('btn-power-on').addEventListener('click', async () => {
+            initAudio();
+            await initAuth();
+            switchView('role');
+        });
+
+        // 2. Role Selection
+        document.getElementById('btn-role-pager').addEventListener('click', () => setupPager());
+        document.getElementById('btn-role-host').addEventListener('click', () => switchView('hostSetup'));
+
+        // --- PAGER SETUP ---
+        async function setupPager() {
+            activeRole = 'pager';
+            if (!currentUser) return;
+            
+            // Generate random 5-digit code
+            myConnectionCode = Math.floor(10000 + Math.random() * 90000).toString();
+            document.getElementById('pager-code-display').innerText = myConnectionCode;
+            switchView('pagerSetup');
+
+            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
+            await setDoc(connRef, {
+                status: 'waiting',
+                pagerId: currentUser.uid,
+                timestamp: Date.now()
+            });
+
+            // Listen for host requests
+            unsubscribeSnapshot = onSnapshot(connRef, (docSnap) => {
+                if (!docSnap.exists()) return;
+                const data = docSnap.data();
+                
+                if (data.status === 'requesting' && data.hostId) {
+                    modal.classList.add('active');
+                } else if (data.status === 'connected') {
+                    modal.classList.remove('active');
+                    switchView('pagerActive');
+                } else if (data.status === 'page_sent' && data.timestamp !== activeConnectionDoc?.timestamp) {
+                    // Received a page!
+                    triggerAlert(data);
+                }
+                activeConnectionDoc = data;
+            }, (err) => console.error(err));
+        }
+
+        // Accept/Reject Connection
+        document.getElementById('btn-accept-connection').addEventListener('click', async () => {
+            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
+            await updateDoc(connRef, { status: 'connected' });
+            modal.classList.remove('active');
+            switchView('pagerActive');
+        });
+
+        document.getElementById('btn-reject-connection').addEventListener('click', async () => {
+            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
+            await updateDoc(connRef, { status: 'waiting', hostId: null });
+            modal.classList.remove('active');
+        });
+
+        // --- HOST SETUP ---
+        document.getElementById('btn-host-connect').addEventListener('click', async () => {
+            if (!currentUser) return;
+            const code = document.getElementById('host-code-input').value.trim();
+            const errorLabel = document.getElementById('host-setup-error');
+            
+            if (code.length !== 5) {
+                errorLabel.innerText = "Please enter a valid 5-digit code.";
+                errorLabel.style.display = "block";
+                return;
+            }
+
+            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', code);
+            const docSnap = await getDoc(connRef);
+
+            if (!docSnap.exists()) {
+                errorLabel.innerText = "Code not found. Is the Pager app open?";
+                errorLabel.style.display = "block";
+                return;
+            }
+
+            errorLabel.style.display = "none";
+            myConnectionCode = code;
+
+            // Request connection
+            await updateDoc(connRef, {
+                status: 'requesting',
+                hostId: currentUser.uid
+            });
+
+            // Listen for Pager to accept
+            unsubscribeSnapshot = onSnapshot(connRef, (docSnap) => {
+                if (!docSnap.exists()) return;
+                const data = docSnap.data();
+                
+                if (data.status === 'connected') {
+                    switchView('hostActive');
+                } else if (data.status === 'waiting') {
+                    // Pager rejected
+                    errorLabel.innerText = "Connection rejected by Pager.";
+                    errorLabel.style.display = "block";
+                    if (unsubscribeSnapshot) unsubscribeSnapshot();
+                }
+            }, (err) => console.error(err));
+        });
+
+        // --- HOST SENDING PAGES ---
+        document.getElementById('btn-send-page').addEventListener('click', async () => {
+            if (!currentUser || !myConnectionCode) return;
+            
+            const btn = document.getElementById('btn-send-page');
+            btn.innerText = "SENDING...";
+            btn.disabled = true;
+
+            const name = document.getElementById('sim-caller-name').value.trim() || "UNKNOWN";
+            const number = document.getElementById('sim-caller-number').value.trim() || "--";
+
+            const connRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', myConnectionCode);
+            
+            await updateDoc(connRef, {
+                status: 'page_sent',
+                callerName: name,
+                callerNumber: number,
+                timestamp: Date.now() // Timestamp forces the pager's listener to recognize a new alert
+            });
+
+            setTimeout(() => {
+                btn.innerText = "PAGE SENT!";
+                setTimeout(() => {
+                    btn.innerText = "SEND PAGE ALERT";
+                    btn.disabled = false;
+                }, 2000);
+            }, 500);
+        });
+
+    </script>
+</body>
+</html>
